@@ -34,8 +34,8 @@ class DeployController extends BaseController
     public function deploy()
     {
         /* Attempt to process known webhook formats. */
-        if ($this->_process_beanstalk_classic()
-            || $this->_process_github_json()
+        if ($this->_process_github()
+            || $this->_process_beanstalk_classic()
         ) {
             return;
         }
@@ -54,7 +54,7 @@ class DeployController extends BaseController
     /**
      * A function to process a Beanstalk classic webhook.
      *
-     * @see    http://blog.beanstalkapp.com/post/7845485728/webhooks-let-you-use-commit-messages-to-trigger-custom
+     * @see http://blog.beanstalkapp.com/post/7845485728/webhooks-let-you-use-commit-messages-to-trigger-custom
      *
      * @access private
      * @return bool True on success, false on failure.
@@ -150,17 +150,29 @@ class DeployController extends BaseController
     }
 
     /**
-     * A function to try to process a GitHub webhook in application/json format.
+     * A function to try to process a GitHub webhook.
+     *
+     * @see https://developer.github.com/webhooks/
      *
      * @access private
      * @return bool True on success, false on failure.
      */
-    private function _process_github_json()
+    private function _process_github()
     {
         /* Attempt to extract JSON data from php://input. */
         $data = json_decode(@file_get_contents('php://input'), true);
         if (empty($data['repository']['name']) || empty($data['ref'])) {
-            return false;
+
+            /* Attempt to extract JSON data from $_POST. */
+            if (empty($_POST['payload'])) {
+                return false;
+            }
+
+            /* Attempt to decode the payload. */
+            $data = json_decode($_POST['payload'], true);
+            if (empty($data['repository']['name']) || empty($data['ref'])) {
+                return false;
+            }
         }
 
         /* Extract name of branch from $data['ref'] as last element. */
