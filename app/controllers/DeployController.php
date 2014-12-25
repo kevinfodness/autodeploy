@@ -34,13 +34,16 @@ class DeployController extends BaseController
     public function deploy()
     {
         /* Attempt to process known webhook formats. */
-        if ($this->_process_beanstalk_classic()) {
+        if ($this->_process_beanstalk_classic()
+            || $this->_process_github_json()
+        ) {
             return;
         }
 
         /* Get the contents of POST to print to the log. */
         ob_start();
         var_dump($_POST);
+        var_dump(http_get_request_body());
         $content = ob_get_contents();
         ob_end_clean();
 
@@ -139,5 +142,15 @@ class DeployController extends BaseController
         Log::info('Finished deployment for ' . $repository . ' on branch ' . $branch);
 
         return true;
+    }
+
+    /**
+     * A function to try to process a GitHub webhook in application/json format.
+     *
+     * @access private
+     * @return bool True on success, false on failure.
+     */
+    private function _process_github_json() {
+        return false;
     }
 }
