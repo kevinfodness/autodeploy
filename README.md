@@ -16,7 +16,3 @@ Currently supports:
 
 * [Beanstalk Classic Webhooks](http://support.beanstalkapp.com/customer/portal/articles/75753-trigger-a-url-on-commit-with-web-hooks)
 * [GitHub Webhooks](https://developer.github.com/webhooks](https://developer.github.com/webhooks)
-
-In progress:
-
-* GitHub Webhooks (using POST method) - Test iteration 4
