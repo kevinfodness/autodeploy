@@ -8,6 +8,9 @@ Requirements:
 * PHP 5.4
 * PHP MCrypt module
 * PHP HTTP module
+* PHP shell_exec enabled
+* git installed on the server
+* Apache process able to access shell and pull/push changes to git remote
 
 Currently supports:
 
@@ -15,4 +18,4 @@ Currently supports:
 
 In progress:
 
-* [GitHub Webhooks](https://developer.github.com/webhooks](https://developer.github.com/webhooks) Test iteration: 11 
+* [GitHub Webhooks](https://developer.github.com/webhooks](https://developer.github.com/webhooks) Test iteration: 12 
