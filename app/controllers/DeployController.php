@@ -96,11 +96,15 @@ class DeployController extends BaseController
     {
         /* Determine if repository exists on this server. */
         if (!is_dir('/var/www/' . $repository)) {
-            Log::info('Repository ' . $repository . ' does not exist on this system.');
+            Log::error('Repository ' . $repository . ' does not exist on this system.');
             return false;
         }
 
-        /* TODO: Determine if current branch checked out for repository matches requested branch. */
+        /* Determine if current branch checked out for repository matches requested branch. */
+        if ($branch !== shell_exec('git rev-parse --abbrev-ref HEAD')) {
+            Log::error('Branch ' . $branch . ' of repository ' . $repository . ' is not checked out on this system.');
+            return false;
+        }
 
         /* TODO: Route to other servers in the network if repository not found on this system. */
 
