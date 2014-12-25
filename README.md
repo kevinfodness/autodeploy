@@ -19,4 +19,4 @@ Currently supports:
 
 In progress:
 
-* GitHub Webhooks (using POST method) - Test iteration 1
+* GitHub Webhooks (using POST method) - Test iteration 2
