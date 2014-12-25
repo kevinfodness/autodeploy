@@ -43,7 +43,7 @@ class DeployController extends BaseController
         /* Get the contents of POST to print to the log. */
         ob_start();
         var_dump($_POST);
-        var_dump(@file_get_contents('php://input'));
+        var_dump(json_decode(@file_get_contents('php://input'), true));
         $content = ob_get_contents();
         ob_end_clean();
 
@@ -151,6 +151,10 @@ class DeployController extends BaseController
      * @return bool True on success, false on failure.
      */
     private function _process_github_json() {
+
+        /* Attempt to extract JSON data from php://input. */
+        $data = json_decode(@file_get_contents('php://input'), true);
+
         return false;
     }
 }
