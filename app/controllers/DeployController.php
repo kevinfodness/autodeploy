@@ -1,7 +1,28 @@
 <?php
 
-/* A controller to handle deployments. */
+/**
+ * Contains a controller class to handle requests to the deployment endpoint.
+ *
+ * PHP Version 5.4+
+ *
+ * @category ContinuousIntegration
+ * @package  Autodeploy
+ * @author   Kevin Fodness <kevin@kevinfodness.com>
+ * @license  GPLv3 http://www.gnu.org/licenses/gpl.html
+ * @link     http://www.kevinfodness.com
+ */
 
+/**
+ * A controller class to handle requests to the deployment endpoint.
+ *
+ * PHP Version 5.4+
+ *
+ * @category ContinuousIntegration
+ * @package  Autodeploy
+ * @author   Kevin Fodness <kevin@kevinfodness.com>
+ * @license  GPLv3 http://www.gnu.org/licenses/gpl.html
+ * @link     http://www.kevinfodness.com
+ */
 class DeployController extends BaseController
 {
     /**
