@@ -52,26 +52,29 @@ class DeployController extends BaseController
     }
 
     /**
-     * A function to process a Beanstalk classic webhook.
+     * A function to process a Beanstalk webhook.
      *
      * @see http://blog.beanstalkapp.com/post/7845485728/webhooks-let-you-use-commit-messages-to-trigger-custom
      *
      * @access private
      * @return bool True on success, false on failure.
      */
-    private function _process_beanstalk_classic()
+    private function _process_beanstalk()
     {
-        /* Determine if payload is empty. */
-        if (empty($_POST['payload'])) {
-            return false;
-        }
+        /* Attempt to extract JSON data from php://input. */
+        $data = json_decode(@file_get_contents('php://input'), true);
+        if (empty($data['repository']['name']) || empty($data['branch'])) {
 
-        /* Attempt to decode the payload. */
-        $data = json_decode($_POST['payload'], true);
-        if (empty($data)) {
-            Log::error('Failed to get json.');
+            /* Attempt to extract JSON data from $_POST. */
+            if (empty($_POST['payload'])) {
+                return false;
+            }
 
-            return false;
+            /* Attempt to decode the payload. */
+            $data = json_decode($_POST['payload'], true);
+            if (empty($data['repository']['name']) || empty($data['branch'])) {
+                return false;
+            }
         }
 
         /* Ensure that the required fields are part of the decoded JSON. */
