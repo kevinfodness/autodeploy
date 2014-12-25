@@ -29,13 +29,13 @@ class DeployController extends BaseController
      * A function to receive incoming deployment requests from VCS and process them.
      *
      * @access public
-     * @return bool True on success, false on failure.
+     * @return void
      */
     public function deploy()
     {
         /* Attempt to process known webhook formats. */
         if ($this->_process_beanstalk_classic()) {
-            return true;
+            return;
         }
 
         /* Get the contents of POST to print to the log. */
@@ -46,8 +46,6 @@ class DeployController extends BaseController
 
         /* Write the error including the contents of $_POST. */
         Log::error('No payload:' . "\n" . $content);
-
-        return false;
     }
 
     /**
