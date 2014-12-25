@@ -1,3 +1,7 @@
+# Laravel
 /bootstrap/compiled.php
 .env.*.php
 .env.php
+
+# PHPStorm
+.idea/workspace.xml
