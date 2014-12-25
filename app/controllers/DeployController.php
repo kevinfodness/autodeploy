@@ -150,15 +150,21 @@ class DeployController extends BaseController
      * @access private
      * @return bool True on success, false on failure.
      */
-    private function _process_github_json() {
-
+    private function _process_github_json()
+    {
         /* Attempt to extract JSON data from php://input. */
         $data = json_decode(@file_get_contents('php://input'), true);
+        if (empty($data['repository']['name']) || empty($data['ref'])) {
+            return false;
+        }
 
-        // data to extract:
-        // $data['repository']['name']
-        // branch name?
+        /* Extract name of branch from $data['ref'] as last element. */
+        $refs = explode('/', $data['ref']);
+        if (empty($refs)) {
+            return false;
+        }
 
-        return false;
+        /* Process deployment. */
+        return $this->_process_deployment($data['repository']['name'], array_pop($refs));
     }
 }
