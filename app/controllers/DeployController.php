@@ -75,7 +75,7 @@ class DeployController extends BaseController
         }
 
         /* Ensure that the required fields are part of the decoded JSON. */
-        if (empty($data['repository']['name']) || !empty($data['branch'])) {
+        if (empty($data['repository']['name']) || empty($data['branch'])) {
             return false;
         }
 
