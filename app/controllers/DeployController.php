@@ -43,7 +43,7 @@ class DeployController extends BaseController
         /* Get the contents of POST to print to the log. */
         ob_start();
         var_dump($_POST);
-        var_dump(http_get_request_body());
+        var_dump(@file_get_contents('php://input'));
         $content = ob_get_contents();
         ob_end_clean();
 
