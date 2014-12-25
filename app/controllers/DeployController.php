@@ -155,6 +155,10 @@ class DeployController extends BaseController
         /* Attempt to extract JSON data from php://input. */
         $data = json_decode(@file_get_contents('php://input'), true);
 
+        // data to extract:
+        // $data['repository']['name']
+        // branch name?
+
         return false;
     }
 }
