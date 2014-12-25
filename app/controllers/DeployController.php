@@ -35,7 +35,7 @@ class DeployController extends BaseController
     {
         /* Attempt to process known webhook formats. */
         if ($this->_process_github()
-            || $this->_process_beanstalk_classic()
+            || $this->_process_beanstalk()
         ) {
             return;
         }
