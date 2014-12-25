@@ -101,7 +101,7 @@ class DeployController extends BaseController
         }
 
         /* Determine if current branch checked out for repository matches requested branch. */
-        $branch_compare = shell_exec('git rev-parse --abbrev-ref HEAD');
+        $branch_compare = trim(shell_exec('git rev-parse --abbrev-ref HEAD'));
         if ($branch !== $branch_compare) {
             Log::error('Branch "' . $branch_compare . '" of repository ' . $repository . ' is not checked out on this system.');
             return false;
