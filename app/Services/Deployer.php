@@ -64,6 +64,7 @@ class Deployer extends \SebastianBergmann\Git\Git {
 	public function __construct( $repository_path, $branch ) {
 		parent::__construct( $repository_path );
 		$this->_branch = $branch;
+		$this->_update_status();
 	}
 
 	/**
