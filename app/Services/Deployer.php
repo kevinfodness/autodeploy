@@ -13,6 +13,7 @@
  */
 
 namespace App\Services;
+use Log;
 
 /**
  * A service class to process deployments.
@@ -73,10 +74,13 @@ class Deployer extends \SebastianBergmann\Git\Git {
 	 */
 	private function _maybe_add() {
 		if ( $this->_status_contains( 'Untracked files:' ) ) {
+			Log::info('Adding untracked files.');
 			$this->execute( 'git add -A' );
 			$this->_commit = true;
+			$this->_update_status();
+		} else {
+			Log::info('No untracked files to add. Skipping.');
 		}
-		$this->_update_status();
 	}
 
 	/**
@@ -87,10 +91,13 @@ class Deployer extends \SebastianBergmann\Git\Git {
 	 */
 	private function _maybe_commit() {
 		if ( $this->_commit === true || $this->_status_contains( 'Changes to be committed:' ) ) {
+			Log::info('Committing changed files.');
 			$this->execute( 'git commit -am "Refreshing branch with updated files."' );
 			$this->_commit = true;
 			$this->_push   = true;
 			$this->_update_status();
+		} else {
+			Log::info('No changed files to commit. Skipping.');
 		}
 	}
 
