@@ -123,6 +123,7 @@ class Deployer extends \SebastianBergmann\Git\Git {
 	 */
 	private function _status_contains( $text ) {
 		foreach ( $this->_status as $line ) {
+			Log::info('Looking through ' . $line . ' for ' . $text);
 			if ( stripos( $line, $text ) !== false ) {
 				return true;
 			}
