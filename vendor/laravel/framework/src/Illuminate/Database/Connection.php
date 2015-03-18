@@ -3,6 +3,10 @@
 use PDO;
 use Closure;
 use DateTime;
+use Exception;
+use LogicException;
+use RuntimeException;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Query\Processors\Processor;
 use Doctrine\DBAL\Connection as DoctrineConnection;
 
@@ -53,23 +57,9 @@ class Connection implements ConnectionInterface {
 	/**
 	 * The event dispatcher instance.
 	 *
-	 * @var \Illuminate\Events\Dispatcher
+	 * @var \Illuminate\Contracts\Events\Dispatcher
 	 */
 	protected $events;
-
-	/**
-	 * The paginator environment instance.
-	 *
-	 * @var \Illuminate\Pagination\Paginator
-	 */
-	protected $paginator;
-
-	/**
-	 * The cache manager instance.
-	 *
-	 * @var \Illuminate\Cache\CacheManager
-	 */
-	protected $cache;
 
 	/**
 	 * The default fetch mode of the connection.
@@ -97,7 +87,7 @@ class Connection implements ConnectionInterface {
 	 *
 	 * @var bool
 	 */
-	protected $loggingQueries = true;
+	protected $loggingQueries = false;
 
 	/**
 	 * Indicates if the connection is in a "dry run".
@@ -273,21 +263,45 @@ class Connection implements ConnectionInterface {
 	 * @param  array   $bindings
 	 * @return array
 	 */
-	public function select($query, $bindings = array())
+	public function selectFromWriteConnection($query, $bindings = array())
 	{
-		return $this->run($query, $bindings, function($me, $query, $bindings)
+		return $this->select($query, $bindings, false);
+	}
+
+	/**
+	 * Run a select statement against the database.
+	 *
+	 * @param  string  $query
+	 * @param  array  $bindings
+	 * @param  bool  $useReadPdo
+	 * @return array
+	 */
+	public function select($query, $bindings = array(), $useReadPdo = true)
+	{
+		return $this->run($query, $bindings, function($me, $query, $bindings) use ($useReadPdo)
 		{
 			if ($me->pretending()) return array();
 
 			// For select statements, we'll simply execute the query and return an array
 			// of the database result set. Each element in the array will be a single
 			// row from the database table, and will either be an array or objects.
-			$statement = $me->getReadPdo()->prepare($query);
+			$statement = $this->getPdoForSelect($useReadPdo)->prepare($query);
 
 			$statement->execute($me->prepareBindings($bindings));
 
 			return $statement->fetchAll($me->getFetchMode());
 		});
+	}
+
+	/**
+	 * Get the PDO connection to use for a select query.
+	 *
+	 * @param  bool  $useReadPdo
+	 * @return \PDO
+	 */
+	protected function getPdoForSelect($useReadPdo = true)
+	{
+		return $useReadPdo ? $this->getReadPdo() : $this->getPdo();
 	}
 
 	/**
@@ -438,7 +452,7 @@ class Connection implements ConnectionInterface {
 		// If we catch an exception, we will roll back so nothing gets messed
 		// up in the database. Then we'll re-throw the exception so it can
 		// be handled how the developer sees fit for their applications.
-		catch (\Exception $e)
+		catch (Exception $e)
 		{
 			$this->rollBack();
 
@@ -518,9 +532,13 @@ class Connection implements ConnectionInterface {
 	 */
 	public function pretend(Closure $callback)
 	{
+		$loggingQueries = $this->loggingQueries;
+
+		$this->enableQueryLog();
+
 		$this->pretending = true;
 
-		$this->queryLog = array();
+		$this->queryLog = [];
 
 		// Basically to make the database connection "pretend", we will just return
 		// the default values for all the query methods, then we will return an
@@ -528,6 +546,8 @@ class Connection implements ConnectionInterface {
 		$callback($this);
 
 		$this->pretending = false;
+
+		$this->loggingQueries = $loggingQueries;
 
 		return $this->queryLog;
 	}
@@ -540,7 +560,7 @@ class Connection implements ConnectionInterface {
 	 * @param  \Closure  $callback
 	 * @return mixed
 	 *
-	 * @throws QueryException
+	 * @throws \Illuminate\Database\QueryException
 	 */
 	protected function run($query, $bindings, Closure $callback)
 	{
@@ -580,7 +600,7 @@ class Connection implements ConnectionInterface {
 	 * @param  \Closure  $callback
 	 * @return mixed
 	 *
-	 * @throws QueryException
+	 * @throws \Illuminate\Database\QueryException
 	 */
 	protected function runQueryCallback($query, $bindings, Closure $callback)
 	{
@@ -595,7 +615,7 @@ class Connection implements ConnectionInterface {
 		// If an exception occurs when attempting to run a query, we'll format the error
 		// message to include the bindings with SQL, which will make this exception a
 		// lot more helpful to the developer instead of just the database's errors.
-		catch (\Exception $e)
+		catch (Exception $e)
 		{
 			throw new QueryException(
 				$query, $this->prepareBindings($bindings), $e
@@ -613,8 +633,10 @@ class Connection implements ConnectionInterface {
 	 * @param  array     $bindings
 	 * @param  \Closure  $callback
 	 * @return mixed
+	 *
+	 * @throws \Illuminate\Database\QueryException
 	 */
-	protected function tryAgainIfCausedByLostConnection(QueryException $e, $query, $bindings, $callback)
+	protected function tryAgainIfCausedByLostConnection(QueryException $e, $query, $bindings, Closure $callback)
 	{
 		if ($this->causedByLostConnection($e))
 		{
@@ -629,12 +651,18 @@ class Connection implements ConnectionInterface {
 	/**
 	 * Determine if the given exception was caused by a lost connection.
 	 *
-	 * @param  \Illuminate\Database\QueryException
+	 * @param  \Illuminate\Database\QueryException  $e
 	 * @return bool
 	 */
 	protected function causedByLostConnection(QueryException $e)
 	{
-		return str_contains($e->getPrevious()->getMessage(), 'server has gone away');
+		$message = $e->getPrevious()->getMessage();
+
+		return str_contains($message, [
+			'server has gone away',
+			'no connection to the server',
+			'Lost connection',
+		]);
 	}
 
 	/**
@@ -651,6 +679,8 @@ class Connection implements ConnectionInterface {
 	 * Reconnect to the database.
 	 *
 	 * @return void
+	 *
+	 * @throws \LogicException
 	 */
 	public function reconnect()
 	{
@@ -659,7 +689,7 @@ class Connection implements ConnectionInterface {
 			return call_user_func($this->reconnector, $this);
 		}
 
-		throw new \LogicException("Lost connection and no reconnector available.");
+		throw new LogicException("Lost connection and no reconnector available.");
 	}
 
 	/**
@@ -680,7 +710,7 @@ class Connection implements ConnectionInterface {
 	 *
 	 * @param  string  $query
 	 * @param  array   $bindings
-	 * @param  $time
+	 * @param  float|null  $time
 	 * @return void
 	 */
 	public function logQuery($query, $bindings, $time = null)
@@ -775,7 +805,7 @@ class Connection implements ConnectionInterface {
 	/**
 	 * Get the current PDO connection.
 	 *
-	 * @return PDO
+	 * @return \PDO
 	 */
 	public function getPdo()
 	{
@@ -785,7 +815,7 @@ class Connection implements ConnectionInterface {
 	/**
 	 * Get the current PDO connection used for reading.
 	 *
-	 * @return PDO
+	 * @return \PDO
 	 */
 	public function getReadPdo()
 	{
@@ -802,6 +832,9 @@ class Connection implements ConnectionInterface {
 	 */
 	public function setPdo($pdo)
 	{
+		if ($this->transactions >= 1)
+			throw new RuntimeException("Can't swap PDO instance while within transaction.");
+
 		$this->pdo = $pdo;
 
 		return $this;
@@ -930,7 +963,7 @@ class Connection implements ConnectionInterface {
 	/**
 	 * Get the event dispatcher used by the connection.
 	 *
-	 * @return \Illuminate\Events\Dispatcher
+	 * @return \Illuminate\Contracts\Events\Dispatcher
 	 */
 	public function getEventDispatcher()
 	{
@@ -940,64 +973,12 @@ class Connection implements ConnectionInterface {
 	/**
 	 * Set the event dispatcher instance on the connection.
 	 *
-	 * @param  \Illuminate\Events\Dispatcher
+	 * @param  \Illuminate\Contracts\Events\Dispatcher
 	 * @return void
 	 */
-	public function setEventDispatcher(\Illuminate\Events\Dispatcher $events)
+	public function setEventDispatcher(Dispatcher $events)
 	{
 		$this->events = $events;
-	}
-
-	/**
-	 * Get the paginator environment instance.
-	 *
-	 * @return \Illuminate\Pagination\Factory
-	 */
-	public function getPaginator()
-	{
-		if ($this->paginator instanceof Closure)
-		{
-			$this->paginator = call_user_func($this->paginator);
-		}
-
-		return $this->paginator;
-	}
-
-	/**
-	 * Set the pagination environment instance.
-	 *
-	 * @param  \Illuminate\Pagination\Factory|\Closure  $paginator
-	 * @return void
-	 */
-	public function setPaginator($paginator)
-	{
-		$this->paginator = $paginator;
-	}
-
-	/**
-	 * Get the cache manager instance.
-	 *
-	 * @return \Illuminate\Cache\CacheManager
-	 */
-	public function getCacheManager()
-	{
-		if ($this->cache instanceof Closure)
-		{
-			$this->cache = call_user_func($this->cache);
-		}
-
-		return $this->cache;
-	}
-
-	/**
-	 * Set the cache manager instance on the connection.
-	 *
-	 * @param  \Illuminate\Cache\CacheManager|\Closure  $cache
-	 * @return void
-	 */
-	public function setCacheManager($cache)
-	{
-		$this->cache = $cache;
 	}
 
 	/**

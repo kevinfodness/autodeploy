@@ -1,5 +1,7 @@
 <?php namespace Illuminate\Database;
 
+use Illuminate\Support\Str;
+use InvalidArgumentException;
 use Illuminate\Database\Connectors\ConnectionFactory;
 
 class DatabaseManager implements ConnectionResolverInterface {
@@ -53,7 +55,7 @@ class DatabaseManager implements ConnectionResolverInterface {
 	 */
 	public function connection($name = null)
 	{
-		$name = $name ?: $this->getDefaultConnection();
+		list($name, $type) = $this->parseConnectionName($name);
 
 		// If we haven't created this connection, we'll create it based on the config
 		// provided in the application. Once we've created the connections we will
@@ -62,10 +64,26 @@ class DatabaseManager implements ConnectionResolverInterface {
 		{
 			$connection = $this->makeConnection($name);
 
+			$this->setPdoForType($connection, $type);
+
 			$this->connections[$name] = $this->prepare($connection);
 		}
 
 		return $this->connections[$name];
+	}
+
+	/**
+	 * Parse the connection into an array of the name and read / write type.
+	 *
+	 * @param  string  $name
+	 * @return array
+	 */
+	protected function parseConnectionName($name)
+	{
+		$name = $name ?: $this->getDefaultConnection();
+
+		return Str::endsWith($name, ['::read', '::write'])
+                            ? explode('::', $name, 2) : [$name, null];
 	}
 
 	/**
@@ -109,10 +127,8 @@ class DatabaseManager implements ConnectionResolverInterface {
 		{
 			return $this->connection($name);
 		}
-		else
-		{
-			return $this->refreshPdoConnections($name);
-		}
+
+		return $this->refreshPdoConnections($name);
 	}
 
 	/**
@@ -176,24 +192,6 @@ class DatabaseManager implements ConnectionResolverInterface {
 			$connection->setEventDispatcher($this->app['events']);
 		}
 
-		// The database connection can also utilize a cache manager instance when cache
-		// functionality is used on queries, which provides an expressive interface
-		// to caching both fluent queries and Eloquent queries that are executed.
-		$app = $this->app;
-
-		$connection->setCacheManager(function() use ($app)
-		{
-			return $app['cache'];
-		});
-
-		// We will setup a Closure to resolve the paginator instance on the connection
-		// since the Paginator isn't used on every request and needs quite a few of
-		// our dependencies. It'll be more efficient to lazily resolve instances.
-		$connection->setPaginator(function() use ($app)
-		{
-			return $app['paginator'];
-		});
-
 		// Here we'll set a reconnector callback. This reconnector can be any callable
 		// so we will set a Closure to reconnect from this manager with the name of
 		// the connection, which will allow us to reconnect from the connections.
@@ -201,6 +199,27 @@ class DatabaseManager implements ConnectionResolverInterface {
 		{
 			$this->reconnect($connection->getName());
 		});
+
+		return $connection;
+	}
+
+	/**
+	 * Prepare the read write mode for database connection instance.
+	 *
+	 * @param  \Illuminate\Database\Connection  $connection
+	 * @param  string  $type
+	 * @return \Illuminate\Database\Connection
+	 */
+	protected function setPdoForType(Connection $connection, $type = null)
+	{
+		if ($type == 'read')
+		{
+			$connection->setPdo($connection->getReadPdo());
+		}
+		elseif ($type == 'write')
+		{
+			$connection->setReadPdo($connection->getPdo());
+		}
 
 		return $connection;
 	}
@@ -224,7 +243,7 @@ class DatabaseManager implements ConnectionResolverInterface {
 
 		if (is_null($config = array_get($connections, $name)))
 		{
-			throw new \InvalidArgumentException("Database [$name] not configured.");
+			throw new InvalidArgumentException("Database [$name] not configured.");
 		}
 
 		return $config;

@@ -29,7 +29,7 @@ class MorphToMany extends BelongsToMany {
 	protected $inverse;
 
 	/**
-	 * Create a new has many relationship instance.
+	 * Create a new morph to many relationship instance.
 	 *
 	 * @param  \Illuminate\Database\Eloquent\Builder  $query
 	 * @param  \Illuminate\Database\Eloquent\Model  $parent
@@ -38,14 +38,14 @@ class MorphToMany extends BelongsToMany {
 	 * @param  string  $foreignKey
 	 * @param  string  $otherKey
 	 * @param  string  $relationName
-	 * @param  bool   $inverse
+	 * @param  bool  $inverse
 	 * @return void
 	 */
 	public function __construct(Builder $query, Model $parent, $name, $table, $foreignKey, $otherKey, $relationName = null, $inverse = false)
 	{
 		$this->inverse = $inverse;
 		$this->morphType = $name.'_type';
-		$this->morphClass = $inverse ? get_class($query->getModel()) : get_class($parent);
+		$this->morphClass = $inverse ? $query->getModel()->getMorphClass() : $parent->getMorphClass();
 
 		parent::__construct($query, $parent, $table, $foreignKey, $otherKey, $relationName);
 	}
@@ -128,9 +128,9 @@ class MorphToMany extends BelongsToMany {
 	{
 		$pivot = new MorphPivot($this->parent, $attributes, $this->table, $exists);
 
-		$pivot->setPivotKeys($this->foreignKey, $this->otherKey);
-
-		$pivot->setMorphType($this->morphType);
+		$pivot->setPivotKeys($this->foreignKey, $this->otherKey)
+			  ->setMorphType($this->morphType)
+			  ->setMorphClass($this->morphClass);
 
 		return $pivot;
 	}

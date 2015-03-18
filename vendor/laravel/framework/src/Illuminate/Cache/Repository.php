@@ -4,20 +4,30 @@ use Closure;
 use DateTime;
 use ArrayAccess;
 use Carbon\Carbon;
-use Illuminate\Support\Traits\MacroableTrait;
+use Illuminate\Contracts\Cache\Store;
+use Illuminate\Support\Traits\Macroable;
+use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Contracts\Cache\Repository as CacheContract;
 
-class Repository implements ArrayAccess {
+class Repository implements CacheContract, ArrayAccess {
 
-	use MacroableTrait {
+	use Macroable {
 		__call as macroCall;
 	}
 
 	/**
 	 * The cache store implementation.
 	 *
-	 * @var \Illuminate\Cache\StoreInterface
+	 * @var \Illuminate\Contracts\Cache\Store
 	 */
 	protected $store;
+
+	/**
+	 * The event dispatcher implementation.
+	 *
+	 * @var \Illuminate\Contracts\Events\Dispatcher
+	 */
+	protected $events;
 
 	/**
 	 * The default number of minutes to store items.
@@ -29,11 +39,37 @@ class Repository implements ArrayAccess {
 	/**
 	 * Create a new cache repository instance.
 	 *
-	 * @param  \Illuminate\Cache\StoreInterface  $store
+	 * @param  \Illuminate\Contracts\Cache\Store  $store
 	 */
-	public function __construct(StoreInterface $store)
+	public function __construct(Store $store)
 	{
 		$this->store = $store;
+	}
+
+	/**
+	 * Set the event dispatcher instance.
+	 *
+	 * @param  \Illuminate\Contracts\Events\Dispatcher
+	 * @return void
+	 */
+	public function setEventDispatcher(Dispatcher $events)
+	{
+		$this->events = $events;
+	}
+
+	/**
+	 * Fire an event for this cache instance.
+	 *
+	 * @param  string  $event
+	 * @param  array  $payload
+	 * @return void
+	 */
+	protected function fireCacheEvent($event, $payload)
+	{
+		if (isset($this->events))
+		{
+			$this->events->fire('cache.'.$event, $payload);
+		}
 	}
 
 	/**
@@ -58,7 +94,18 @@ class Repository implements ArrayAccess {
 	{
 		$value = $this->store->get($key);
 
-		return ! is_null($value) ? $value : value($default);
+		if (is_null($value))
+		{
+			$this->fireCacheEvent('missed', [$key]);
+
+			$value = value($default);
+		}
+		else
+		{
+			$this->fireCacheEvent('hit', [$key, $value]);
+		}
+
+		return $value;
 	}
 
 	/**
@@ -89,7 +136,12 @@ class Repository implements ArrayAccess {
 	{
 		$minutes = $this->getMinutes($minutes);
 
-		$this->store->put($key, $value, $minutes);
+		if ( ! is_null($minutes))
+		{
+			$this->store->put($key, $value, $minutes);
+
+			$this->fireCacheEvent('write', [$key, $value, $minutes]);
+		}
 	}
 
 	/**
@@ -102,12 +154,31 @@ class Repository implements ArrayAccess {
 	 */
 	public function add($key, $value, $minutes)
 	{
+		if (method_exists($this->store, 'add'))
+		{
+			return $this->store->add($key, $value, $minutes);
+		}
+
 		if (is_null($this->get($key)))
 		{
 			$this->put($key, $value, $minutes); return true;
 		}
 
 		return false;
+	}
+
+	/**
+	 * Store an item in the cache indefinitely.
+	 *
+	 * @param  string  $key
+	 * @param  mixed   $value
+	 * @return void
+	 */
+	public function forever($key, $value)
+	{
+		$this->store->forever($key, $value);
+
+		$this->fireCacheEvent('write', [$key, $value, 0]);
 	}
 
 	/**
@@ -168,6 +239,21 @@ class Repository implements ArrayAccess {
 	}
 
 	/**
+	 * Remove an item from the cache.
+	 *
+	 * @param  string $key
+	 * @return bool
+	 */
+	public function forget($key)
+	{
+		$success = $this->store->forget($key);
+
+		$this->fireCacheEvent('delete', [$key]);
+
+		return $success;
+	}
+
+	/**
 	 * Get the default cache time.
 	 *
 	 * @return int
@@ -191,7 +277,7 @@ class Repository implements ArrayAccess {
 	/**
 	 * Get the cache store implementation.
 	 *
-	 * @return \Illuminate\Cache\StoreInterface
+	 * @return \Illuminate\Contracts\Cache\Store
 	 */
 	public function getStore()
 	{
@@ -247,16 +333,18 @@ class Repository implements ArrayAccess {
 	 * Calculate the number of minutes with the given duration.
 	 *
 	 * @param  \DateTime|int  $duration
-	 * @return int
+	 * @return int|null
 	 */
 	protected function getMinutes($duration)
 	{
 		if ($duration instanceof DateTime)
 		{
-			return max(0, Carbon::instance($duration)->diffInMinutes());
+			$fromNow = Carbon::instance($duration)->diffInMinutes();
+
+			return $fromNow > 0 ? $fromNow : null;
 		}
 
-		return is_string($duration) ? intval($duration) : $duration;
+		return is_string($duration) ? (int) $duration : $duration;
 	}
 
 	/**
@@ -272,10 +360,8 @@ class Repository implements ArrayAccess {
 		{
 			return $this->macroCall($method, $parameters);
 		}
-		else
-		{
-			return call_user_func_array(array($this->store, $method), $parameters);
-		}
+
+		return call_user_func_array(array($this->store, $method), $parameters);
 	}
 
 }

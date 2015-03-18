@@ -1,8 +1,11 @@
 <?php namespace Illuminate\Queue;
 
 use Closure;
+use InvalidArgumentException;
+use Illuminate\Contracts\Queue\Factory as FactoryContract;
+use Illuminate\Contracts\Queue\Monitor as MonitorContract;
 
-class QueueManager {
+class QueueManager implements FactoryContract, MonitorContract {
 
 	/**
 	 * The application instance.
@@ -77,7 +80,7 @@ class QueueManager {
 	 * Resolve a queue connection instance.
 	 *
 	 * @param  string  $name
-	 * @return \Illuminate\Queue\QueueInterface
+	 * @return \Illuminate\Contracts\Queue\Queue
 	 */
 	public function connection($name = null)
 	{
@@ -102,7 +105,7 @@ class QueueManager {
 	 * Resolve a queue connection.
 	 *
 	 * @param  string  $name
-	 * @return \Illuminate\Queue\QueueInterface
+	 * @return \Illuminate\Contracts\Queue\Queue
 	 */
 	protected function resolve($name)
 	{
@@ -126,7 +129,7 @@ class QueueManager {
 			return call_user_func($this->connectors[$driver]);
 		}
 
-		throw new \InvalidArgumentException("No connector for [$driver]");
+		throw new InvalidArgumentException("No connector for [$driver]");
 	}
 
 	/**
@@ -194,6 +197,16 @@ class QueueManager {
 	public function getName($connection = null)
 	{
 		return $connection ?: $this->getDefaultDriver();
+	}
+
+	/**
+	* Determine if the application is in maintenance mode.
+	*
+	* @return bool
+	*/
+	public function isDownForMaintenance()
+	{
+		return $this->app->isDownForMaintenance();
 	}
 
 	/**

@@ -172,8 +172,8 @@ class Builder {
 	/**
 	 * Create a new command set with a Closure.
 	 *
-	 * @param  string    $table
-	 * @param  \Closure  $callback
+	 * @param  string  $table
+	 * @param  \Closure|null  $callback
 	 * @return \Illuminate\Database\Schema\Blueprint
 	 */
 	protected function createBlueprint($table, Closure $callback = null)
@@ -182,10 +182,8 @@ class Builder {
 		{
 			return call_user_func($this->resolver, $table, $callback);
 		}
-		else
-		{
-			return new Blueprint($table, $callback);
-		}
+
+		return new Blueprint($table, $callback);
 	}
 
 	/**

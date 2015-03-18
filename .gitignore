@@ -3,5 +3,17 @@
 .env.*.php
 .env.php
 
-# PHPStorm
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+ehthumbs.db
+Thumbs.db
+*.swp
+
+# PhpStorm
+.idea/dataSources.local.xml
 .idea/workspace.xml

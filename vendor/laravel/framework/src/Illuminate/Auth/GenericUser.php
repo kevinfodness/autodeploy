@@ -1,6 +1,8 @@
 <?php namespace Illuminate\Auth;
 
-class GenericUser implements UserInterface {
+use Illuminate\Contracts\Auth\Authenticatable as UserContract;
+
+class GenericUser implements UserContract {
 
 	/**
 	 * All of the user's attributes.
@@ -109,7 +111,7 @@ class GenericUser implements UserInterface {
 	 * Dynamically unset a value on the user.
 	 *
 	 * @param  string  $key
-	 * @return bool
+	 * @return void
 	 */
 	public function __unset($key)
 	{
