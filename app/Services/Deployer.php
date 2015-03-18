@@ -13,6 +13,7 @@
  */
 
 namespace App\Services;
+
 use Log;
 
 /**
@@ -47,6 +48,12 @@ class Deployer extends \SebastianBergmann\Git\Git {
 	private $_push = false;
 
 	/**
+	 * @var string The full repository path.
+	 * @access private
+	 */
+	private $_repository_path;
+
+	/**
 	 * @var array The output of the current status of the repository.
 	 * @access private
 	 */
@@ -63,7 +70,8 @@ class Deployer extends \SebastianBergmann\Git\Git {
 	 */
 	public function __construct( $repository_path, $branch ) {
 		parent::__construct( $repository_path );
-		$this->_branch = $branch;
+		$this->_repository_path = realpath( $repository_path );
+		$this->_branch          = $branch;
 		$this->_update_status();
 	}
 
@@ -75,12 +83,12 @@ class Deployer extends \SebastianBergmann\Git\Git {
 	 */
 	private function _maybe_add() {
 		if ( $this->_status_contains( 'Untracked files:' ) ) {
-			Log::info('Adding untracked files.');
+			Log::info( 'Adding untracked files.' );
 			$this->execute( 'git add -A' );
 			$this->_commit = true;
 			$this->_update_status();
 		} else {
-			Log::info('No untracked files to add. Skipping.');
+			Log::info( 'No untracked files to add. Skipping.' );
 		}
 	}
 
@@ -92,13 +100,13 @@ class Deployer extends \SebastianBergmann\Git\Git {
 	 */
 	private function _maybe_commit() {
 		if ( $this->_commit === true || $this->_status_contains( 'Changes to be committed:' ) ) {
-			Log::info('Committing changed files.');
+			Log::info( 'Committing changed files.' );
 			$this->execute( 'git commit -am "Refreshing branch with updated files."' );
 			$this->_commit = true;
 			$this->_push   = true;
 			$this->_update_status();
 		} else {
-			Log::info('No changed files to commit. Skipping.');
+			Log::info( 'No changed files to commit. Skipping.' );
 		}
 	}
 
@@ -124,7 +132,7 @@ class Deployer extends \SebastianBergmann\Git\Git {
 	 */
 	private function _status_contains( $text ) {
 		foreach ( $this->_status as $line ) {
-			Log::info('Looking through ' . $line . ' for ' . $text);
+			Log::info( 'Looking through ' . $line . ' for ' . $text );
 			if ( stripos( $line, $text ) !== false ) {
 				return true;
 			}
@@ -140,7 +148,10 @@ class Deployer extends \SebastianBergmann\Git\Git {
 	 * @return void
 	 */
 	private function _update_status() {
-		$this->_status = $this->execute( 'git status' );
+		$cwd = getcwd();
+		chdir( $this->_repository_path );
+		exec( 'git status', $output, $return_value );
+		chdir( $cwd );
 	}
 
 	/**
