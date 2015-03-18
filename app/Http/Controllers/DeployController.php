@@ -43,27 +43,44 @@ class DeployController extends Controller {
 	}
 
 	/**
-	 * A function to receive incoming deployment requests from VCS and process them.
-	 *
-	 * @access public
-	 * @return void
+	 * A function to get the data
+	 * @return bool
 	 */
-	public function deploy() {
+	private function _get_data() {
 
-		/* Attempt to process a deployment. */
-		if ( $this->_process_deployment() ) {
-			return;
+		/* Attempt to extract JSON data directly from php://input. */
+		$data = json_decode( @file_get_contents( 'php://input' ), true );
+		if ( ! empty( $data['repository']['name'] ) && ! empty( $data['ref'] ) ) {
+			return $data;
 		}
 
-		/* Get the contents of POST to print to the log. */
-		ob_start();
-		var_dump( $_POST );
-		var_dump( json_decode( @file_get_contents( 'php://input' ), true ) );
-		$content = ob_get_contents();
-		ob_end_clean();
+		/* Attempt to extract JSON data from payload. */
+		if ( ! empty( $data['payload'] ) ) {
+			$data = $data['payload'];
 
-		/* Write the error including the contents of $_POST. */
-		Log::error( 'Missing or malformed payload:' . "\n" . $content );
+			/* Determine if we need to JSON-decode the payload. */
+			if ( ! is_array( $data ) ) {
+				$data = json_decode( $data, true );
+			}
+
+			/* Determine if data is properly formed. */
+			if ( ! empty( $data['repository']['name'] ) && ! empty( $data['ref'] ) ) {
+				return $data;
+			}
+		}
+
+		/* Attempt to extract JSON data from $_POST. */
+		if ( empty( $_POST['payload'] ) ) {
+			return false;
+		}
+
+		/* Attempt to decode the payload. */
+		$data = json_decode( $_POST['payload'], true );
+		if ( empty( $data['repository']['name'] ) || empty( $data['ref'] ) ) {
+			return false;
+		}
+
+		return $data;
 	}
 
 	/**
@@ -107,47 +124,6 @@ class DeployController extends Controller {
 		Log::info( 'Finished deployment for ' . $repository . ' on branch ' . $branch );
 
 		return true;
-	}
-
-	/**
-	 * A function to get the data
-	 * @return bool
-	 */
-	private function _get_data() {
-
-		/* Attempt to extract JSON data directly from php://input. */
-		$data = json_decode( @file_get_contents( 'php://input' ), true );
-		if ( ! empty( $data['repository']['name'] ) && ! empty( $data['ref'] ) ) {
-			return $data;
-		}
-
-		/* Attempt to extract JSON data from payload. */
-		if ( ! empty( $data['payload'] ) ) {
-			$data = $data['payload'];
-
-			/* Determine if we need to JSON-decode the payload. */
-			if ( ! is_array( $data ) ) {
-				$data = json_decode( $data, true );
-			}
-
-			/* Determine if data is properly formed. */
-			if ( ! empty( $data['repository']['name'] ) && ! empty( $data['ref'] ) ) {
-				return $data;
-			}
-		}
-
-		/* Attempt to extract JSON data from $_POST. */
-		if ( empty( $_POST['payload'] ) ) {
-			return false;
-		}
-
-		/* Attempt to decode the payload. */
-		$data = json_decode( $_POST['payload'], true );
-		if ( empty( $data['repository']['name'] ) || empty( $data['ref'] ) ) {
-			return false;
-		}
-
-		return $data;
 	}
 
 	/**
@@ -207,5 +183,29 @@ class DeployController extends Controller {
 		Log::info( 'Finished relaying.' );
 
 		return true;
+	}
+
+	/**
+	 * A function to receive incoming deployment requests from VCS and process them.
+	 *
+	 * @access public
+	 * @return void
+	 */
+	public function deploy() {
+
+		/* Attempt to process a deployment. */
+		if ( $this->_process_deployment() ) {
+			return;
+		}
+
+		/* Get the contents of POST to print to the log. */
+		ob_start();
+		var_dump( $_POST );
+		var_dump( json_decode( @file_get_contents( 'php://input' ), true ) );
+		$content = ob_get_contents();
+		ob_end_clean();
+
+		/* Write the error including the contents of $_POST. */
+		Log::error( 'Missing or malformed payload:' . "\n" . $content );
 	}
 }

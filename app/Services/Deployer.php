@@ -152,6 +152,7 @@ class Deployer extends \SebastianBergmann\Git\Git {
 		chdir( $this->_repository_path );
 		exec( 'git status', $output, $return_value );
 		chdir( $cwd );
+		$this->_status = $output;
 	}
 
 	/**
