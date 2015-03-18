@@ -14,6 +14,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\Deployer;
 use Log;
 
 /**
@@ -92,10 +93,9 @@ class DeployController extends Controller {
 		}
 
 		/* Determine if current branch checked out for repository matches requested branch. */
-		chdir( '/var/www/' . $repository );
-		$branch_compare = trim( shell_exec( 'git rev-parse --abbrev-ref HEAD' ) );
-		if ( $branch !== $branch_compare ) {
-			Log::info( 'Branch "' . $branch_compare . '" of repository ' . $repository . ' is not checked out on this system.' );
+		$repo = new Deployer( '/var/www/' . $repository, $branch );
+		if ( ! $repo->is_valid_deployment() ) {
+			Log::info( 'Branch "' . $branch . '" of repository ' . $repository . ' is not checked out on this system.' );
 			$this->_route_deployment( $repository, $branch, $data );
 
 			return false;
@@ -103,10 +103,7 @@ class DeployController extends Controller {
 
 		/* Process the deployment, picking up local modified files in the process, if necessary. */
 		Log::info( 'Starting deployment for ' . $repository . ' on branch ' . $branch );
-		shell_exec( escapeshellcmd( 'git add -A' ) );
-		Log::info( shell_exec( escapeshellcmd( 'git commit -am \'Refreshing branch with updated files.\'' ) ) );
-		shell_exec( escapeshellcmd( 'git pull origin ' . $branch ) );
-		shell_exec( escapeshellcmd( 'git push origin ' . $branch ) );
+		$repo->deploy();
 		Log::info( 'Finished deployment for ' . $repository . ' on branch ' . $branch );
 
 		return true;
