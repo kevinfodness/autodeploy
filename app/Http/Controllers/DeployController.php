@@ -95,7 +95,7 @@ class DeployController extends Controller {
 		chdir( '/var/www/' . $repository );
 		$branch_compare = trim( shell_exec( 'git rev-parse --abbrev-ref HEAD' ) );
 		if ( $branch !== $branch_compare ) {
-			Log::error( 'Branch "' . $branch_compare . '" of repository ' . $repository . ' is not checked out on this system.' );
+			Log::info( 'Branch "' . $branch_compare . '" of repository ' . $repository . ' is not checked out on this system.' );
 			$this->_route_deployment( $repository, $branch, $data );
 
 			return false;
