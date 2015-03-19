@@ -93,6 +93,9 @@ class DeployController extends Controller {
 
 		/* Attempt to get data. */
 		$data = $this->_get_data();
+		if ( empty( $data['ref'] ) ) {
+			return false;
+		}
 
 		/* Extract name of branch from $data['ref'] as last element. */
 		$refs = explode( '/', $data['ref'] );
@@ -106,7 +109,9 @@ class DeployController extends Controller {
 
 		/* Determine if repository exists on this server. */
 		if ( ! is_dir( '/var/www/' . $repository ) ) {
-			return $this->_route_deployment( $repository, $branch, $data );
+			$this->_route_deployment( $repository, $branch, $data );
+
+			return true;
 		}
 
 		/* Determine if current branch checked out for repository matches requested branch. */
@@ -115,7 +120,7 @@ class DeployController extends Controller {
 			Log::info( 'Branch "' . $branch . '" of repository ' . $repository . ' is not checked out on this system.' );
 			$this->_route_deployment( $repository, $branch, $data );
 
-			return false;
+			return true;
 		}
 
 		/* Process the deployment, picking up local modified files in the process, if necessary. */
