@@ -109,7 +109,7 @@ class Deployer extends \SebastianBergmann\Git\Git {
 	 * @return void
 	 */
 	private function _maybe_commit() {
-		if ( $this->_commit === true || $this->_status_contains( 'Changes to be committed:' ) ) {
+		if ( $this->_commit === true || $this->_status_contains( 'Changes not staged for commit:' ) || $this->_status_contains( 'Changes to be committed:' ) ) {
 			Log::info( 'Committing changed files.' );
 			$cwd = getcwd();
 			chdir( $this->_repository_path );
