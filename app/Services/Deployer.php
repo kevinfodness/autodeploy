@@ -93,7 +93,7 @@ class Deployer extends \SebastianBergmann\Git\Git {
 			if ( $return_value === 0 ) {
 				$this->_commit = true;
 			} else {
-				Log::error( 'Could not add untracked files. Output:' . "\n" . implode( "\n", $output ) );
+				Log::error( 'Could not add untracked files. Failed with exit code ' . $return_value . '. Output:' . "\n" . implode( "\n", $output ) );
 			}
 
 			$this->_update_status();
@@ -121,7 +121,7 @@ class Deployer extends \SebastianBergmann\Git\Git {
 				$this->_commit = true;
 				$this->_push   = true;
 			} else {
-				Log::error( 'Could not refresh branch with updated files. Output:' . "\n" . implode( "\n", $output ) );
+				Log::error( 'Could not refresh branch with updated files. Failed with exit code ' . $return_value . '. Output:' . "\n" . implode( "\n", $output ) );
 			}
 
 			$this->_update_status();
@@ -152,7 +152,6 @@ class Deployer extends \SebastianBergmann\Git\Git {
 	 */
 	private function _status_contains( $text ) {
 		foreach ( $this->_status as $line ) {
-			Log::info( 'Looking through ' . $line . ' for ' . $text );
 			if ( stripos( $line, $text ) !== false ) {
 				return true;
 			}
