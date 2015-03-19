@@ -84,8 +84,18 @@ class Deployer extends \SebastianBergmann\Git\Git {
 	private function _maybe_add() {
 		if ( $this->_status_contains( 'Untracked files:' ) ) {
 			Log::info( 'Adding untracked files.' );
-			$this->execute( 'git add -A' );
-			$this->_commit = true;
+			$cwd = getcwd();
+			chdir( $this->_repository_path );
+			exec( 'git add -A', $output, $return_value );
+			chdir( $cwd );
+
+			/* Handle errors. */
+			if ( $return_value === 0 ) {
+				$this->_commit = true;
+			} else {
+				Log::error( 'Could not add untracked files. Output:' . "\n" . implode( "\n", $output ) );
+			}
+
 			$this->_update_status();
 		} else {
 			Log::info( 'No untracked files to add. Skipping.' );
@@ -101,9 +111,19 @@ class Deployer extends \SebastianBergmann\Git\Git {
 	private function _maybe_commit() {
 		if ( $this->_commit === true || $this->_status_contains( 'Changes to be committed:' ) ) {
 			Log::info( 'Committing changed files.' );
-			$this->execute( 'git commit -am "Refreshing branch with updated files."' );
-			$this->_commit = true;
-			$this->_push   = true;
+			$cwd = getcwd();
+			chdir( $this->_repository_path );
+			exec( 'git commit -am "Refreshing branch with updated files."', $output, $return_value );
+			chdir( $cwd );
+
+			/* Handle errors. */
+			if ( $return_value === 0 ) {
+				$this->_commit = true;
+				$this->_push   = true;
+			} else {
+				Log::error( 'Could not refresh branch with updated files. Output:' . "\n" . implode( "\n", $output ) );
+			}
+
 			$this->_update_status();
 		} else {
 			Log::info( 'No changed files to commit. Skipping.' );
