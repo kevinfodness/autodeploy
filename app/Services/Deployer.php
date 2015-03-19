@@ -113,6 +113,8 @@ class Deployer extends \SebastianBergmann\Git\Git {
 			Log::info( 'Committing changed files.' );
 			$cwd = getcwd();
 			chdir( $this->_repository_path );
+			exec( 'git config user.email "www-data@' . $_SERVER['SERVER_NAME'] . '" 2>&1', $output, $return_value );
+			exec( 'git config user.name "www-data" 2>&1', $output, $return_value );
 			exec( 'git commit -am "Refreshing branch with updated files." 2>&1', $output, $return_value );
 			chdir( $cwd );
 
