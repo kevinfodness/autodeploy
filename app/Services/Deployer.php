@@ -86,7 +86,7 @@ class Deployer extends \SebastianBergmann\Git\Git {
 			Log::info( 'Adding untracked files.' );
 			$cwd = getcwd();
 			chdir( $this->_repository_path );
-			exec( 'git add -A', $output, $return_value );
+			exec( 'git add -A 2>&1', $output, $return_value );
 			chdir( $cwd );
 
 			/* Handle errors. */
@@ -113,7 +113,7 @@ class Deployer extends \SebastianBergmann\Git\Git {
 			Log::info( 'Committing changed files.' );
 			$cwd = getcwd();
 			chdir( $this->_repository_path );
-			exec( 'git commit -am "Refreshing branch with updated files."', $output, $return_value );
+			exec( 'git commit -am "Refreshing branch with updated files." 2>&1', $output, $return_value );
 			chdir( $cwd );
 
 			/* Handle errors. */
