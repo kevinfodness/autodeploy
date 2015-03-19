@@ -43,14 +43,58 @@ class DeployController extends Controller {
 	}
 
 	/**
-	 * A function to get the data
+	 * A function to retrieve a branch name from an array of data about a push.
+	 *
+	 * @param array $data The array to look through for a branch name.
+	 *
+	 * @access private
+	 * @return mixed An array of branch names on success, or false on failure.
+	 */
+	private function _get_branches( $data ) {
+
+		$branches = array();
+
+		/* Perform a high-level explicit branch check. */
+		if ( ! empty( $data['branch'] ) ) {
+			if ( ! in_array( $data['branch'], $branches ) ) {
+				$branches[] = $data['branch'];
+			}
+		}
+
+		/* Perform a high-level ref check. */
+		if ( ! empty( $data['ref'] ) ) {
+			$refs = explode( '/', $data['ref'] );
+			if ( ! empty( $refs ) && is_array( $refs ) ) {
+				$branch = array_pop( $refs );
+				if ( ! in_array( $branch, $branches ) ) {
+					$branches[] = $branch;
+				}
+			}
+		}
+
+		/* Loop through commit history looking for branch names. */
+		if ( ! empty( $data['commits'] ) && is_array( $data['commits'] ) ) {
+			foreach ( $data['commits'] as $commit ) {
+				if ( ! in_array( $commit['branch'], $branches ) ) {
+					$branches[] = $commit['branch'];
+				}
+			}
+		}
+
+		return ( ! empty( $branches ) ) ? $branches : false;
+	}
+
+	/**
+	 * A function to get the data from the webhook payload under a variety of formats.
+	 *
+	 * @access private
 	 * @return bool
 	 */
 	private function _get_data() {
 
 		/* Attempt to extract JSON data directly from php://input. */
-		$data = json_decode( @file_get_contents( 'php://input' ), true );
-		if ( ! empty( $data['repository']['name'] ) && ! empty( $data['ref'] ) ) {
+		$data = $this->_maybe_decode_json( @file_get_contents( 'php://input' ) );
+		if ( $this->_get_repo_name( $data ) !== false && $this->_get_branches( $data ) !== false ) {
 			return $data;
 		}
 
@@ -58,13 +102,13 @@ class DeployController extends Controller {
 		if ( ! empty( $data['payload'] ) ) {
 			$data = $data['payload'];
 
-			/* Determine if we need to JSON-decode the payload. */
+			/* Determine if we need to JSON-decode the payload (should be automatic, but people be crazy). */
 			if ( ! is_array( $data ) ) {
-				$data = json_decode( $data, true );
+				$data = $this->_maybe_decode_json( $data );
 			}
 
 			/* Determine if data is properly formed. */
-			if ( ! empty( $data['repository']['name'] ) && ! empty( $data['ref'] ) ) {
+			if ( $this->_get_repo_name( $data ) !== false && $this->_get_branches( $data ) !== false ) {
 				return $data;
 			}
 		}
@@ -75,12 +119,64 @@ class DeployController extends Controller {
 		}
 
 		/* Attempt to decode the payload. */
-		$data = json_decode( $_POST['payload'], true );
-		if ( empty( $data['repository']['name'] ) || empty( $data['ref'] ) ) {
+		$data = $this->_maybe_decode_json( $_POST['payload'] );
+		if ( $this->_get_repo_name( $data ) !== false && $this->_get_branches( $data ) !== false ) {
+			return $data;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Processes a data block trying to get a repo name.
+	 *
+	 * @param array $data The array to look through for a repo name.
+	 *
+	 * @access private
+	 * @return mixed The repo name on success, or false on failure.
+	 */
+	private function _get_repo_name( $data ) {
+
+		/* Try to use repository slug, if available. */
+		if ( ! empty( $data['repository']['slug'] ) ) {
+			return $data['repository']['slug'];
+		}
+
+		/* Fall back to repository name. */
+		if ( ! empty( $data['repository']['name'] ) ) {
+			return $data['repository']['name'];
+		}
+
+		return false;
+	}
+
+	/**
+	 * A function to try to decode a variable as JSON, while being a bit more lenient than the PHP parser.
+	 *
+	 * @param string $data The data to decode.
+	 *
+	 * @access private
+	 * @return mixed
+	 */
+	private function _maybe_decode_json( $data ) {
+
+		/* If we have already been given an array, return it as-is. */
+		if ( is_array( $data ) ) {
+			return $data;
+		}
+
+		/* If data is empty, don't bother. */
+		if ( empty( $data ) ) {
 			return false;
 		}
 
-		return $data;
+		/* Replace references to line breaks for leniency. */
+		$data = str_replace( array( "\n", "\r" ), '', $data );
+
+		/* Try to decode. */
+		$json = json_decode( $data, true );
+
+		return ( ! empty( $json ) && is_array( $json ) ) ? $json : false;
 	}
 
 	/**
@@ -93,40 +189,39 @@ class DeployController extends Controller {
 
 		/* Attempt to get data. */
 		$data = $this->_get_data();
-		if ( empty( $data['ref'] ) ) {
+		if ( empty( $data ) ) {
 			return false;
 		}
 
-		/* Extract name of branch from $data['ref'] as last element. */
-		$refs = explode( '/', $data['ref'] );
-		if ( empty( $refs ) ) {
-			return false;
-		}
-
-		/* Store repository name and branch name for ease of access. */
-		$repository = $data['repository']['name'];
-		$branch     = array_pop( $refs );
+		/* Store repository name and branches for ease of access. */
+		$repository = $this->_get_repo_name( $data );
+		$branches   = $this->_get_branches( $data );
 
 		/* Determine if repository exists on this server. */
 		if ( ! is_dir( '/var/www/' . $repository ) ) {
-			$this->_route_deployment( $repository, $branch, $data );
+			foreach ( $branches as $branch ) {
+				$this->_route_deployment( $repository, $branch, $data );
+			}
 
 			return true;
 		}
 
-		/* Determine if current branch checked out for repository matches requested branch. */
-		$repo = new Deployer( '/var/www/' . $repository, $branch );
-		if ( ! $repo->is_valid_deployment() ) {
-			Log::info( 'Branch "' . $branch . '" of repository ' . $repository . ' is not checked out on this system.' );
-			$this->_route_deployment( $repository, $branch, $data );
+		/* Process each branch. */
+		foreach ( $branches as $branch ) {
 
-			return true;
+			/* Determine if current branch checked out for repository matches requested branch. */
+			$repo = new Deployer( '/var/www/' . $repository, $branch );
+			if ( ! $repo->is_valid_deployment() ) {
+				Log::info( 'Branch "' . $branch . '" of repository ' . $repository . ' is not checked out on this system.' );
+				$this->_route_deployment( $repository, $branch, $data );
+				continue;
+			}
+
+			/* Process the deployment, picking up local modified files in the process, if necessary. */
+			Log::info( 'Starting deployment for ' . $repository . ' on branch ' . $branch );
+			$repo->deploy();
+			Log::info( 'Finished deployment for ' . $repository . ' on branch ' . $branch );
 		}
-
-		/* Process the deployment, picking up local modified files in the process, if necessary. */
-		Log::info( 'Starting deployment for ' . $repository . ' on branch ' . $branch );
-		$repo->deploy();
-		Log::info( 'Finished deployment for ' . $repository . ' on branch ' . $branch );
 
 		return true;
 	}
@@ -205,8 +300,10 @@ class DeployController extends Controller {
 
 		/* Get the contents of POST to print to the log. */
 		ob_start();
-		var_dump( $_POST );
-		var_dump( json_decode( @file_get_contents( 'php://input' ), true ) );
+		echo 'Contents of php://input JSON-decoded:' . "\n";
+		print_r( $this->_maybe_decode_json( @file_get_contents( 'php://input' ) ) );
+		echo 'Contents of $_POST:' . "\n";
+		print_r( $_POST );
 		$content = ob_get_contents();
 		ob_end_clean();
 
