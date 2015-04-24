@@ -75,8 +75,26 @@ class DeployController extends Controller {
 		/* Loop through commit history looking for branch names. */
 		if ( ! empty( $data['commits'] ) && is_array( $data['commits'] ) ) {
 			foreach ( $data['commits'] as $commit ) {
-				if ( ! in_array( $commit['branch'], $branches ) ) {
+				if ( ! empty( $commit['branch'] ) && ! in_array( $commit['branch'], $branches ) ) {
 					$branches[] = $commit['branch'];
+				}
+			}
+		}
+
+		/**
+		 * If no branches have been defined, and it is a BitBucket push, configure a push to all defined environments.
+		 *
+		 * Rationale: When BitBucket issues a POST hook for a branch that has no bare commits - just commits from
+		 * another branch - it doesn't report on which branch received the merge. Thus, we should trigger a deployment
+		 * on all defined endpoints to ensure that the change was captured appropriately.
+		 */
+		if ( empty( $branches ) && ! empty( $data['canon_url'] ) && strpos( $data['canon_url'], 'bitbucket.org' ) >= 0 ) {
+			$branches[] = 'master';
+			foreach ( $this->_url_map as $destination ) {
+				foreach ( $destination as $branch ) {
+					if ( ! in_array( $branch, $branches ) ) {
+						$branches[] = $branch;
+					}
 				}
 			}
 		}

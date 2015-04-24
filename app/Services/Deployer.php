@@ -84,18 +84,8 @@ class Deployer extends \SebastianBergmann\Git\Git {
 	private function _maybe_add() {
 		if ( $this->_status_contains( 'Untracked files:' ) ) {
 			Log::info( 'Adding untracked files.' );
-			$cwd = getcwd();
-			chdir( $this->_repository_path );
-			exec( 'git add -A 2>&1', $output, $return_value );
-			chdir( $cwd );
-
-			/* Handle errors. */
-			if ( $return_value === 0 ) {
-				$this->_commit = true;
-			} else {
-				Log::error( 'Could not add untracked files. Failed with exit code ' . $return_value . '. Output:' . "\n" . implode( "\n", $output ) );
-			}
-
+			$this->execute( 'git add -A' );
+			$this->_commit = true;
 			$this->_update_status();
 		} else {
 			Log::info( 'No untracked files to add. Skipping.' );
@@ -111,21 +101,9 @@ class Deployer extends \SebastianBergmann\Git\Git {
 	private function _maybe_commit() {
 		if ( $this->_commit === true || $this->_status_contains( 'Changes not staged for commit:' ) || $this->_status_contains( 'Changes to be committed:' ) ) {
 			Log::info( 'Committing changed files.' );
-			$cwd = getcwd();
-			chdir( $this->_repository_path );
-			exec( 'git config user.email "www-data@' . $_SERVER['SERVER_NAME'] . '" 2>&1', $output, $return_value );
-			exec( 'git config user.name "www-data" 2>&1', $output, $return_value );
-			exec( 'git commit -am "Refreshing branch with updated files." 2>&1', $output, $return_value );
-			chdir( $cwd );
-
-			/* Handle errors. */
-			if ( $return_value === 0 ) {
-				$this->_commit = true;
-				$this->_push   = true;
-			} else {
-				Log::error( 'Could not refresh branch with updated files. Failed with exit code ' . $return_value . '. Output:' . "\n" . implode( "\n", $output ) );
-			}
-
+			$this->execute( 'git commit -am "Refreshing branch with updated files."' );
+			$this->_commit = true;
+			$this->_push   = true;
 			$this->_update_status();
 		} else {
 			Log::info( 'No changed files to commit. Skipping.' );
@@ -140,8 +118,18 @@ class Deployer extends \SebastianBergmann\Git\Git {
 	 */
 	private function _maybe_push() {
 		if ( $this->_push === true ) {
-			$this->execute( 'git push origin ' . $this->_branch );
+			$this->execute( 'git push origin ' . escapeshellarg( $this->_branch ) );
 		}
+	}
+
+	/**
+	 * A function to perform a pull.
+	 *
+	 * @access private
+	 * @return void
+	 */
+	private function _pull() {
+		$this->execute( 'git pull origin ' . escapeshellarg( $this->_branch ) );
 	}
 
 	/**
@@ -169,11 +157,51 @@ class Deployer extends \SebastianBergmann\Git\Git {
 	 * @return void
 	 */
 	private function _update_status() {
+		$this->_status = $this->execute( 'git status' );
+	}
+
+	/**
+	 * Overrides the built-in Git execute function to be compatible with Laravel.
+	 *
+	 * @param string $command The command to execute. Assumes all arguments have already been escaped.
+	 *
+	 * @access protected
+	 * @return string The output of the command.
+	 */
+	protected function execute( $command ) {
+
+		/* Sanitize the command, piping STDERR to STDOUT. */
+		$command = escapeshellcmd( $command ) . ' 2>&1';
+
+		/* Store the current working directory so we can change back to it. */
 		$cwd = getcwd();
+
+		/* Change working directory to the repository path. */
 		chdir( $this->_repository_path );
-		exec( 'git status', $output, $return_value );
+
+		/* Attempt to execute the command, capturing the output and return value. */
+		exec( $command, $output, $return_value );
+
+		/* If the return value is 128, it means that the repo hasn't been configured with user.name and user.email. */
+		if ( $return_value === 128 ) {
+
+			/* Run repo config. */
+			exec( 'git config user.email ' . escapeshellarg( 'www-data@' . $_SERVER['SERVER_NAME'] ) . ' 2>&1', $output, $return_value );
+			exec( 'git config user.name "www-data" 2>&1', $output, $return_value );
+
+			/* Try running the command again. */
+			exec( $command, $output, $return_value );
+		}
+
+		/* Change working directory back to the original. */
 		chdir( $cwd );
-		$this->_status = $output;
+
+		/* Log any errors we came across. */
+		if ( $return_value !== 0 ) {
+			Log::error( 'Failed while trying to execute `' . $command . '` with exit code ' . $return_value . '. Output:' . "\n" . implode( "\n", $output ) );
+		}
+
+		return $output;
 	}
 
 	/**
@@ -185,7 +213,7 @@ class Deployer extends \SebastianBergmann\Git\Git {
 	public function deploy() {
 		$this->_maybe_add();
 		$this->_maybe_commit();
-		$this->execute( 'git pull origin ' . $this->_branch );
+		$this->_pull();
 		$this->_maybe_push();
 	}
 
