@@ -81,6 +81,15 @@ class DeployController extends Controller {
 			}
 		}
 
+		/* Loop through changes array looking for branch names (BitBucket webhooks). */
+		if ( ! empty( $data['push']['changes'] ) && is_array( $data['push']['changes'] ) ) {
+			foreach ( $data['push']['changes'] as $change ) {
+				if ( ! empty( $change['new']['name'] ) && ! in_array( $change['new']['name'], $branches ) ) {
+					$branches[] = $change['new']['name'];
+				}
+			}
+		}
+
 		/**
 		 * If no branches have been defined, and it is a BitBucket push, configure a push to all defined environments.
 		 *
